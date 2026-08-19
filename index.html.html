@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partnerships Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#F6F2E9; --surface:#FFFFFF; --ink:#182420; --ink-soft:#5B655F;
+    --myrtle:#00573C; --myrtle-dark:#00402C; --myrtle-tint:#E3EFE9;
+    --cardinal:#C6102F; --cardinal-tint:#FBE6E7;
+    --gold:#B4901A; --gold-tint:#F7EFD8;
+    --tan:#D9D2C0; --line:#E4DECD; --done:#9A9385;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif; padding:32px 20px 80px; }
+  .wrap{max-width:880px;margin:0 auto;}
+
+  .masthead{ border-bottom:3px solid var(--myrtle); padding-bottom:14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+  .eyebrow{ font-family:'Oswald',sans-serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--myrtle); font-weight:500; margin:0 0 4px; }
+  h1{ font-family:'Oswald',sans-serif; font-size:28px; font-weight:600; margin:0; letter-spacing:0.5px; }
+  .search-box{ display:flex; align-items:center; }
+  .search-box input{
+    font-family:'Inter',sans-serif; font-size:13px; padding:8px 12px; width:220px;
+    border:1px solid var(--tan); border-radius:16px; background:#fff;
+  }
+
+  .rollover-note{
+    font-size:12px; color:var(--myrtle-dark); background:var(--myrtle-tint);
+    border-radius:4px; padding:8px 12px; margin-bottom:16px; display:none;
+  }
+
+  .tabbar{ display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; margin-bottom:20px; border-bottom:1px solid var(--line); }
+  .tab{
+    font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:0.3px; white-space:nowrap;
+    padding:9px 14px; color:var(--ink-soft); background:none; border:none; border-bottom:3px solid transparent;
+    cursor:pointer; flex-shrink:0;
+  }
+  .tab.active{ color:var(--myrtle-dark); border-bottom-color:var(--myrtle); font-weight:600; }
+  .tab.addtab{ color:var(--gold); font-size:16px; padding:9px 12px; }
+  .tab.dragging{ opacity:0.4; }
+  .tab.drag-over{ border-bottom-color:var(--gold); }
+
+  .new-sponsor-row{
+    display:flex; gap:8px; align-items:center; margin-bottom:20px;
+    background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px;
+  }
+  .new-sponsor-row input{ flex:1; font-family:'Inter',sans-serif; font-size:13px; padding:8px 9px; border:1px solid var(--tan); border-radius:4px; }
+  .new-sponsor-row button, .new-sponsor-row .cancel{ font-family:'Oswald',sans-serif; font-size:12px; border-radius:4px; padding:8px 14px; cursor:pointer; }
+  .new-sponsor-row button{ background:var(--myrtle); color:#fff; border:none; }
+  .new-sponsor-row .cancel{ background:none; border:1px solid var(--line); color:var(--ink-soft); }
+
+  .add-panel{ background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:16px; margin-bottom:24px; }
+  .add-row{ display:grid; grid-template-columns:1.6fr 1fr 0.8fr 0.9fr 1fr auto; gap:8px; }
+  .add-row.no-sponsor{ grid-template-columns:1.8fr 0.9fr 1fr 1fr auto; }
+  @media (max-width:700px){ .add-row, .add-row.no-sponsor{grid-template-columns:1fr 1fr;} }
+  .add-row input, .add-row select{
+    font-family:'Inter',sans-serif; font-size:13px; padding:8px 9px; border:1px solid var(--tan); border-radius:4px; background:#fff; color:var(--ink); width:100%;
+  }
+  .add-row button{
+    font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:0.5px; background:var(--myrtle); color:#fff; border:none;
+    border-radius:4px; padding:8px 16px; cursor:pointer; white-space:nowrap;
+  }
+  .add-row button:hover{background:var(--myrtle-dark);}
+  .field-err{color:var(--cardinal);font-size:11px;margin-top:6px;display:none;}
+
+  .section-title{ font-family:'Oswald',sans-serif; font-size:14px; letter-spacing:1.5px; text-transform:uppercase; margin:0 0 10px; }
+
+  .dash-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:28px; }
+  .dash-card{ background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:14px; cursor:pointer; }
+  .dash-card:hover{ border-color:var(--myrtle); }
+  .dash-card h4{ font-family:'Oswald',sans-serif; font-size:14px; margin:0 0 8px; color:var(--myrtle-dark); }
+  .dash-stat-row{ display:flex; justify-content:space-between; font-size:12px; color:var(--ink-soft); margin-bottom:3px; }
+  .dash-stat-row b{ color:var(--ink); }
+  .dash-stat-row.hot b{ color:var(--cardinal); }
+
+  .urgent-strip{margin-bottom:28px;}
+  .urgent-empty{ font-size:13px; color:var(--ink-soft); font-style:italic; }
+  .urgent-item{
+    display:flex; align-items:center; gap:10px; background:var(--cardinal-tint); border-left:3px solid var(--cardinal);
+    padding:8px 12px; border-radius:0 4px 4px 0; margin-bottom:6px; font-size:13px;
+  }
+  .urgent-item.medium{ background:var(--gold-tint); border-left-color:var(--gold); }
+  .urgent-item .tag{ font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#79141F; font-weight:500; flex-shrink:0; }
+  .urgent-item.medium .tag{ color:#7A5C0B; }
+  .urgent-item .txt{flex:1;}
+  .urgent-item .when{font-size:11px;color:#79141F;flex-shrink:0;}
+  .urgent-item.medium .when{ color:#7A5C0B; }
+
+  .tab-toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+  .toolbar-left{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink-soft); }
+  .toolbar-left label{ display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .toolbar-right{ display:flex; align-items:center; gap:8px; }
+  .ghost-btn{
+    font-family:'Oswald',sans-serif; font-size:12px; background:none; border:1px solid var(--line); color:var(--myrtle-dark);
+    border-radius:4px; padding:6px 12px; cursor:pointer;
+  }
+  .ghost-btn:hover{ background:var(--myrtle-tint); }
+  .ghost-btn.done-btn{ border-color:var(--myrtle); background:var(--myrtle); color:#fff; }
+  .ghost-btn.done-btn:hover{ background:var(--myrtle-dark); }
+  .copy-wrap{ position:relative; }
+  .toast{
+    position:absolute; top:-26px; right:0; background:var(--ink); color:#fff; font-size:11px;
+    padding:3px 8px; border-radius:4px; opacity:0; transition:opacity 0.2s; pointer-events:none;
+  }
+  .toast.show{ opacity:1; }
+
+  .task-list{ background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:6px 16px 12px; }
+  .task-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .task-row:last-child{border-bottom:none;}
+  .task-row input[type=checkbox]{ flex-shrink:0; width:15px; height:15px; cursor:pointer; accent-color:var(--myrtle); }
+  .num{
+    font-family:'Oswald',sans-serif; font-weight:600; font-size:12px; color:var(--myrtle); background:var(--myrtle-tint);
+    border:1px solid var(--myrtle); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .task-row.done .num{ color:var(--done); border-color:var(--done); background:#F1EFE9; }
+  .prio-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .prio-dot.high{ background:var(--cardinal); }
+  .prio-dot.medium{ background:var(--gold); }
+  .prio-dot.low{ background:var(--tan); }
+  .task-text{ flex:1; font-size:13.5px; color:var(--ink); }
+  .task-row.done .task-text{ color:var(--done); text-decoration:line-through; }
+  .task-sponsor-tag{ font-size:10.5px; color:var(--myrtle-dark); background:var(--myrtle-tint); border-radius:10px; padding:2px 8px; flex-shrink:0; }
+  .task-when{ font-size:11.5px; font-weight:600; width:78px; flex-shrink:0; }
+  .task-when.thisweek{ color:var(--ink-soft); }
+  .task-when.eow{ color:var(--cardinal); }
+  .task-when.nextweek{ color:var(--gold); }
+  .task-when.later{ color:var(--done); }
+  select.status{
+    font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600; padding:4px 8px; border-radius:12px; border:none; cursor:pointer; flex-shrink:0;
+  }
+  select.status.todo{background:var(--tan);color:#54503F;}
+  select.status.progress{background:var(--myrtle-tint);color:var(--myrtle-dark);}
+  select.status.waiting{background:var(--gold-tint);color:var(--gold);}
+  select.status.done{background:#EDEBE4;color:var(--done);}
+  .del-btn{ background:none; border:none; color:var(--ink-soft); font-size:15px; cursor:pointer; padding:2px 4px; flex-shrink:0; }
+  .del-btn:hover{color:var(--cardinal);}
+  .empty-list{ text-align:center; color:var(--ink-soft); font-size:13px; padding:24px 0; font-style:italic; }
+
+  .lockscreen{
+    position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:999; padding:20px;
+  }
+  .lockbox{ background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:28px; width:100%; max-width:320px; text-align:center; }
+  .lockbox h2{ font-family:'Oswald',sans-serif; font-size:18px; margin:0 0 4px; }
+  .lockbox p{ font-size:12.5px; color:var(--ink-soft); margin:0 0 16px; }
+  .lockbox input{ width:100%; font-family:'Inter',sans-serif; font-size:14px; padding:10px 12px; border:1px solid var(--tan); border-radius:6px; margin-bottom:10px; }
+  .lockbox button{ width:100%; font-family:'Oswald',sans-serif; font-size:13px; background:var(--myrtle); color:#fff; border:none; border-radius:6px; padding:10px; cursor:pointer; }
+  .lockbox button:hover{ background:var(--myrtle-dark); }
+  .lockbox .lockerr{ color:var(--cardinal); font-size:12px; margin:8px 0 0; display:none; }
+  .syncstatus{ font-size:11px; color:var(--ink-soft); margin-bottom:10px; display:none; }
+  .syncstatus.show{ display:block; }
+  .syncstatus.err{ color:var(--cardinal); }
+</style>
+</head>
+<body>
+
+<div class="lockscreen" id="lockscreen">
+  <div class="lockbox">
+    <h2>Partnerships Tracker</h2>
+    <p>Enter the shared password to continue.</p>
+    <input type="password" id="lockInput" placeholder="Password" autofocus>
+    <button id="lockBtn">Unlock</button>
+    <p class="lockerr" id="lockErr">Wrong password, try again.</p>
+  </div>
+</div>
+
+<div class="wrap" id="mainWrap" style="display:none;">
+
+  <div class="masthead">
+    <div>
+      <p class="eyebrow">South Sydney Rabbitohs · Partnerships</p>
+      <h1>Task tracker</h1>
+    </div>
+    <div class="search-box"><input type="text" id="globalSearch" placeholder="Search all tasks..."></div>
+  </div>
+
+  <p class="rollover-note" id="rolloverNote"></p>
+  <p class="syncstatus" id="syncStatus"></p>
+
+  <div class="tabbar" id="tabbar"></div>
+  <div class="new-sponsor-row" id="newSponsorRow" style="display:none;">
+    <input type="text" id="newSponsorInput" placeholder="Sponsor or workstream name">
+    <button id="newSponsorSave">Add tab</button>
+    <button class="cancel" id="newSponsorCancel">Cancel</button>
+  </div>
+
+  <div id="content"></div>
+
+</div>
+
+<!-- ====================================================================
+  FIREBASE SETUP REQUIRED:
+  1. Create a free Firebase project at https://console.firebase.google.com
+  2. Enable "Firestore Database" (start in test mode, then lock down rules
+     as shown in the setup instructions you were given)
+  3. Get your web app config from Project Settings > General > Your apps
+  4. Paste it into FIREBASE_CONFIG below, replacing the placeholder object
+  5. Set SHARED_PASSWORD below to whatever password your team should use
+===================================================================== -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  // ---- PASTE YOUR FIREBASE CONFIG HERE ----
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDdLBNDjw2d5NxKdYOnA3TbABLMEF1vUaM",
+    authDomain: "souths-partnerships.firebaseapp.com",
+    projectId: "souths-partnerships",
+    storageBucket: "souths-partnerships.firebasestorage.app",
+    messagingSenderId: "95437399161",
+    appId: "1:95437399161:web:890c940428dfefe53f20a8"
+  };
+  // ---- SET YOUR SHARED PASSWORD HERE ----
+  var SHARED_PASSWORD = "Emma2025!";
+
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var db = firebase.firestore();
+  var DOC_REF = db.collection('partnershipsTracker').doc('data');
+
+  function setSyncStatus(msg, isErr){
+    var el = document.getElementById('syncStatus');
+    if(!el) return;
+    el.textContent = msg;
+    el.className = 'syncstatus show' + (isErr ? ' err' : '');
+  }
+
+  // Simple shared-password gate. Not real security (this is a public
+  // static site) -- just keeps casual visitors out.
+  function initLock(){
+    var unlocked = sessionStorage.getItem('prt-unlocked') === 'yes';
+    if(unlocked){
+      document.getElementById('lockscreen').style.display = 'none';
+      document.getElementById('mainWrap').style.display = 'block';
+      return;
+    }
+    var input = document.getElementById('lockInput');
+    var btn = document.getElementById('lockBtn');
+    var err = document.getElementById('lockErr');
+    function tryUnlock(){
+      if(input.value === SHARED_PASSWORD){
+        sessionStorage.setItem('prt-unlocked', 'yes');
+        document.getElementById('lockscreen').style.display = 'none';
+        document.getElementById('mainWrap').style.display = 'block';
+      } else {
+        err.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    }
+    btn.onclick = tryUnlock;
+    input.addEventListener('keydown', function(e){ if(e.key === 'Enter') tryUnlock(); });
+    input.focus();
+  }
+
+  var TASKS_KEY = 'prt-tasks-v3';
+  var SPONSORS_KEY = 'prt-sponsors-v3';
+  var LASTWEEK_KEY = 'prt-lastweek-v1';
+  var tasks = [];
+  var sponsors = [];
+  var activeTab = 'dashboard';
+  var searchQuery = '';
+  var selectedIds = new Set();
+  var dragSponsor = null;
+
+  var WHEN_ORDER = { eow:0, thisweek:1, nextweek:2, later:3 };
+  var WHEN_LABEL = { thisweek:'This week', eow:'EOW', nextweek:'Next week', later:'Later' };
+
+  function uid(){ return 't' + Date.now() + Math.random().toString(36).slice(2,7); }
+  function escapeHtml(s){
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+  }
+  function weekKey(d){
+    var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    var dayNum = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - dayNum + 3);
+    var firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+    var weekNum = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+    return date.getUTCFullYear() + '-W' + weekNum;
+  }
+
+  var suppressNextSnapshot = false; // avoid re-rendering from our own writes mid-edit
+  var docLoaded = false;
+
+  function applyRolloverIfNeeded(){
+    var currentWeek = weekKey(new Date());
+    var storedWeek = localStorage.getItem(LASTWEEK_KEY); // rollover marker is per-device, that's fine
+    if(storedWeek && storedWeek !== currentWeek){
+      var rolled = 0;
+      tasks.forEach(function(t){
+        if(t.status === 'done') return;
+        if(t.when === 'nextweek'){ t.when = 'thisweek'; rolled++; }
+        else if(t.when === 'thisweek' || t.when === 'eow'){ t.when = 'thisweek'; rolled++; }
+      });
+      if(rolled > 0){
+        saveTasks();
+        var note = document.getElementById('rolloverNote');
+        note.textContent = 'New week — ' + rolled + ' task' + (rolled===1?'':'s') + ' rolled forward automatically.';
+        note.style.display = 'block';
+      }
+    }
+    localStorage.setItem(LASTWEEK_KEY, currentWeek);
+  }
+
+  // Live sync: listen for changes from Firestore (this device or any other)
+  // and re-render automatically when the shared data changes.
+  function load(){
+    setSyncStatus('Connecting…', false);
+    DOC_REF.onSnapshot(function(doc){
+      setSyncStatus('Synced', false);
+      var data = doc.exists ? doc.data() : {};
+      tasks = data.tasks ? JSON.parse(data.tasks) : [];
+      sponsors = data.sponsors ? JSON.parse(data.sponsors) : [];
+      tasks.forEach(function(t){
+        if(sponsors.indexOf(t.sponsor) === -1) sponsors.push(t.sponsor);
+        if(!WHEN_ORDER.hasOwnProperty(t.when)) t.when = 'thisweek';
+      });
+      if(!docLoaded){ docLoaded = true; applyRolloverIfNeeded(); }
+      render();
+    }, function(err){
+      setSyncStatus('Sync error — check your Firebase setup (' + err.message + ')', true);
+    });
+  }
+  function saveTasks(){
+    DOC_REF.set({ tasks: JSON.stringify(tasks) }, { merge: true }).catch(function(err){
+      setSyncStatus('Save failed — check your connection', true);
+    });
+  }
+  function saveSponsors(){
+    DOC_REF.set({ sponsors: JSON.stringify(sponsors) }, { merge: true }).catch(function(err){
+      setSyncStatus('Save failed — check your connection', true);
+    });
+  }
+
+  function tasksFor(sponsor){ return tasks.filter(function(t){ return t.sponsor === sponsor; }); }
+
+  function renderTabs(){
+    var bar = document.getElementById('tabbar');
+    var html = '<button class="tab ' + (activeTab==='dashboard'?'active':'') + '" data-tab="dashboard">Dashboard</button>';
+    sponsors.forEach(function(s){
+      html += '<button class="tab ' + (activeTab===s?'active':'') + '" draggable="true" data-tab="' + escapeHtml(s) + '">' + escapeHtml(s) + '</button>';
+    });
+    html += '<button class="tab addtab" id="addTabBtn" aria-label="Add sponsor tab">+</button>';
+    bar.innerHTML = html;
+    bar.querySelectorAll('.tab[data-tab]').forEach(function(btn){
+      btn.onclick = function(){
+        activeTab = btn.getAttribute('data-tab');
+        selectedIds.clear();
+        document.getElementById('newSponsorRow').style.display = 'none';
+        document.getElementById('globalSearch').value = '';
+        searchQuery = '';
+        render();
+      };
+      btn.addEventListener('dragstart', function(e){
+        dragSponsor = btn.getAttribute('data-tab');
+        btn.classList.add('dragging');
+      });
+      btn.addEventListener('dragend', function(){
+        btn.classList.remove('dragging');
+        bar.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('drag-over'); });
+      });
+      btn.addEventListener('dragover', function(e){
+        if(!dragSponsor) return;
+        e.preventDefault();
+        btn.classList.add('drag-over');
+      });
+      btn.addEventListener('dragleave', function(){ btn.classList.remove('drag-over'); });
+      btn.addEventListener('drop', function(e){
+        e.preventDefault();
+        btn.classList.remove('drag-over');
+        var target = btn.getAttribute('data-tab');
+        if(!dragSponsor || dragSponsor === target) return;
+        var from = sponsors.indexOf(dragSponsor);
+        var to = sponsors.indexOf(target);
+        if(from === -1 || to === -1) return;
+        sponsors.splice(from, 1);
+        sponsors.splice(to, 0, dragSponsor);
+        dragSponsor = null;
+        saveSponsors(); render();
+      });
+    });
+    document.getElementById('addTabBtn').onclick = function(){
+      document.getElementById('newSponsorRow').style.display = 'flex';
+      document.getElementById('newSponsorInput').focus();
+    };
+  }
+
+  function sponsorOptionsHtml(){
+    return sponsors.map(function(s){ return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>'; }).join('');
+  }
+
+  function renderDashboard(){
+    var host = document.getElementById('content');
+    var open = tasks.filter(function(t){ return t.status !== 'done'; });
+
+    var urgent = open.filter(function(t){
+      return t.when === 'eow' || t.when === 'thisweek' || t.priority === 'high';
+    }).sort(function(a,b){
+      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      var order = { high:0, medium:1, low:2 };
+      return order[a.priority] - order[b.priority];
+    });
+
+    var urgentHtml = urgent.length === 0
+      ? '<p class="urgent-empty">Nothing due this week or marked high priority.</p>'
+      : urgent.map(function(t){
+          var cls = (t.when === 'eow' || t.priority === 'high') ? '' : 'medium';
+          return '<div class="urgent-item ' + cls + '"><span class="tag">' + escapeHtml(t.sponsor) + '</span>' +
+            '<span class="txt">' + escapeHtml(t.text) + '</span>' +
+            '<span class="when">' + WHEN_LABEL[t.when] + '</span></div>';
+        }).join('');
+
+    var cardsHtml = sponsors.map(function(s){
+      var list = tasksFor(s);
+      var openCount = list.filter(function(t){ return t.status !== 'done'; }).length;
+      var thisWeekCount = list.filter(function(t){ return t.status !== 'done' && (t.when === 'thisweek' || t.when === 'eow'); }).length;
+      var waitingCount = list.filter(function(t){ return t.status === 'waiting'; }).length;
+      var highCount = list.filter(function(t){ return t.status !== 'done' && t.priority === 'high'; }).length;
+      return '<div class="dash-card" data-tab="' + escapeHtml(s) + '">' +
+        '<h4>' + escapeHtml(s) + '</h4>' +
+        '<div class="dash-stat-row"><span>Open</span><b>' + openCount + '</b></div>' +
+        '<div class="dash-stat-row hot"><span>Due this week</span><b>' + thisWeekCount + '</b></div>' +
+        '<div class="dash-stat-row"><span>Waiting</span><b>' + waitingCount + '</b></div>' +
+        '<div class="dash-stat-row"><span>High priority</span><b>' + highCount + '</b></div>' +
+      '</div>';
+    }).join('');
+
+    var quickAddHtml = sponsors.length === 0 ? '' :
+      '<div class="add-panel">' +
+        '<div class="add-row">' +
+          '<input type="text" id="qaText" placeholder="Quick add a task...">' +
+          '<select id="qaSponsor">' + sponsorOptionsHtml() + '</select>' +
+          '<select id="qaWhen"><option value="thisweek" selected>This week</option><option value="eow">EOW</option><option value="nextweek">Next week</option><option value="later">Later</option></select>' +
+          '<select id="qaPriority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>' +
+          '<select id="qaStatus"><option value="todo">To do</option><option value="progress">In progress</option><option value="waiting">Waiting</option></select>' +
+          '<button id="qaAddBtn">Add</button>' +
+        '</div>' +
+        '<p class="field-err" id="qaErr">Enter a task before adding.</p>' +
+      '</div>';
+
+    host.innerHTML = quickAddHtml +
+      '<div class="urgent-strip"><h2 class="section-title" style="color:var(--cardinal);">Needs attention</h2>' + urgentHtml + '</div>' +
+      '<h2 class="section-title" style="color:var(--myrtle);">By sponsor</h2>' +
+      '<div class="dash-grid">' + (cardsHtml || '<p class="empty-list">No sponsors yet, use the + tab to add one.</p>') + '</div>';
+
+    host.querySelectorAll('.dash-card').forEach(function(c){
+      c.onclick = function(){ activeTab = c.getAttribute('data-tab'); selectedIds.clear(); render(); };
+    });
+
+    if(sponsors.length > 0){
+      document.getElementById('qaAddBtn').onclick = function(){
+        var textEl = document.getElementById('qaText');
+        var text = textEl.value.trim();
+        var err = document.getElementById('qaErr');
+        if(!text){ err.style.display = 'block'; return; }
+        err.style.display = 'none';
+        tasks.push({
+          id: uid(), text: text, sponsor: document.getElementById('qaSponsor').value,
+          when: document.getElementById('qaWhen').value, priority: document.getElementById('qaPriority').value,
+          status: document.getElementById('qaStatus').value
+        });
+        saveTasks(); render();
+      };
+      document.getElementById('qaText').addEventListener('keydown', function(e){
+        if(e.key === 'Enter') document.getElementById('qaAddBtn').click();
+      });
+    }
+  }
+
+  function taskRowHtml(t, idx, showSponsorTag){
+    return '<div class="task-row ' + (t.status === 'done' ? 'done' : '') + '" data-id="' + t.id + '">' +
+      '<input type="checkbox" class="rowcheck" data-id="' + t.id + '" ' + (selectedIds.has(t.id) ? 'checked' : '') + '>' +
+      '<span class="num">' + (idx+1) + '</span>' +
+      '<span class="prio-dot ' + t.priority + '" title="' + t.priority + ' priority"></span>' +
+      '<span class="task-text">' + escapeHtml(t.text) + '</span>' +
+      (showSponsorTag ? '<span class="task-sponsor-tag">' + escapeHtml(t.sponsor) + '</span>' : '') +
+      '<span class="task-when ' + t.when + '">' + WHEN_LABEL[t.when] + '</span>' +
+      '<select class="status ' + t.status + '" data-id="' + t.id + '">' +
+        '<option value="todo"' + (t.status==='todo'?' selected':'') + '>To do</option>' +
+        '<option value="progress"' + (t.status==='progress'?' selected':'') + '>In progress</option>' +
+        '<option value="waiting"' + (t.status==='waiting'?' selected':'') + '>Waiting</option>' +
+        '<option value="done"' + (t.status==='done'?' selected':'') + '>Done</option>' +
+      '</select>' +
+      '<button class="del-btn" data-id="' + t.id + '" aria-label="Delete task">&#10005;</button>' +
+    '</div>';
+  }
+
+  function attachRowHandlers(host){
+    host.querySelectorAll('select.status').forEach(function(el){
+      el.onchange = function(){
+        var id = el.getAttribute('data-id');
+        var t = tasks.find(function(x){ return x.id === id; });
+        if(t){ t.status = el.value; saveTasks(); render(); }
+      };
+    });
+    host.querySelectorAll('.del-btn').forEach(function(el){
+      el.onclick = function(){
+        var id = el.getAttribute('data-id');
+        tasks = tasks.filter(function(x){ return x.id !== id; });
+        selectedIds.delete(id);
+        saveTasks(); render();
+      };
+    });
+    host.querySelectorAll('.rowcheck').forEach(function(el){
+      el.onchange = function(){
+        var id = el.getAttribute('data-id');
+        if(el.checked) selectedIds.add(id); else selectedIds.delete(id);
+        renderToolbar();
+      };
+    });
+  }
+
+  function renderToolbar(){
+    var el = document.getElementById('bulkBtn');
+    if(!el) return;
+    if(selectedIds.size > 0){
+      el.style.display = 'inline-block';
+      el.textContent = 'Mark ' + selectedIds.size + ' done';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  function buildSummary(sponsor){
+    var list = tasksFor(sponsor).filter(function(t){ return t.status !== 'done'; });
+    var lines = [sponsor + ' — task update'];
+    if(list.length === 0){ lines.push('', 'Nothing open.'); return lines.join('\n'); }
+    ['eow','thisweek','nextweek','later'].forEach(function(bucket){
+      var items = list.filter(function(t){ return t.when === bucket; });
+      if(items.length === 0) return;
+      lines.push('', WHEN_LABEL[bucket] + ':');
+      items.forEach(function(t){
+        lines.push('- ' + t.text + (t.priority === 'high' ? ' (high priority)' : '') + (t.status === 'waiting' ? ' [waiting on partner/other]' : ''));
+      });
+    });
+    return lines.join('\n');
+  }
+
+  function renderSponsorTab(sponsor){
+    var host = document.getElementById('content');
+    var list = tasksFor(sponsor).slice().sort(function(a,b){
+      if(a.status === 'done' && b.status !== 'done') return 1;
+      if(b.status === 'done' && a.status !== 'done') return -1;
+      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      var order = { high:0, medium:1, low:2 };
+      return order[a.priority] - order[b.priority];
+    });
+
+    var rows = list.length === 0
+      ? '<p class="empty-list">No tasks for ' + escapeHtml(sponsor) + ' yet.</p>'
+      : list.map(function(t, idx){ return taskRowHtml(t, idx, false); }).join('');
+
+    host.innerHTML =
+      '<div class="add-panel">' +
+        '<div class="add-row no-sponsor">' +
+          '<input type="text" id="taskText" placeholder="Task, e.g. Draft halftime recap email">' +
+          '<select id="taskWhen"><option value="thisweek" selected>This week</option><option value="eow">EOW</option><option value="nextweek">Next week</option><option value="later">Later</option></select>' +
+          '<select id="taskPriority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>' +
+          '<select id="taskStatus"><option value="todo">To do</option><option value="progress">In progress</option><option value="waiting">Waiting</option></select>' +
+          '<button id="addBtn">Add task</button>' +
+        '</div>' +
+        '<p class="field-err" id="fieldErr">Enter a task before adding.</p>' +
+      '</div>' +
+      '<div class="tab-toolbar">' +
+        '<div class="toolbar-left">' +
+          '<label><input type="checkbox" id="selectAll"> Select all</label>' +
+          '<button class="ghost-btn done-btn" id="bulkBtn" style="display:none;">Mark done</button>' +
+        '</div>' +
+        '<div class="toolbar-right"><div class="copy-wrap"><span class="toast" id="copyToast">Copied!</span><button class="ghost-btn" id="copyBtn">Copy as update</button></div></div>' +
+      '</div>' +
+      '<div class="task-list">' + rows + '</div>';
+
+    document.getElementById('addBtn').onclick = function(){
+      var textEl = document.getElementById('taskText');
+      var text = textEl.value.trim();
+      var err = document.getElementById('fieldErr');
+      if(!text){ err.style.display = 'block'; return; }
+      err.style.display = 'none';
+      tasks.push({
+        id: uid(), text: text, sponsor: sponsor,
+        when: document.getElementById('taskWhen').value, priority: document.getElementById('taskPriority').value,
+        status: document.getElementById('taskStatus').value
+      });
+      saveTasks(); render();
+    };
+    document.getElementById('taskText').addEventListener('keydown', function(e){
+      if(e.key === 'Enter') document.getElementById('addBtn').click();
+    });
+
+    document.getElementById('selectAll').onchange = function(e){
+      if(e.target.checked){ list.forEach(function(t){ selectedIds.add(t.id); }); }
+      else { list.forEach(function(t){ selectedIds.delete(t.id); }); }
+      render();
+    };
+    document.getElementById('bulkBtn').onclick = function(){
+      tasks.forEach(function(t){ if(selectedIds.has(t.id)) t.status = 'done'; });
+      selectedIds.clear();
+      saveTasks(); render();
+    };
+    document.getElementById('copyBtn').onclick = function(){
+      var text = buildSummary(sponsor);
+      var toast = document.getElementById('copyToast');
+      function flash(){ toast.classList.add('show'); setTimeout(function(){ toast.classList.remove('show'); }, 1500); }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(flash).catch(function(){ window.prompt('Copy this update:', text); });
+      } else {
+        window.prompt('Copy this update:', text);
+      }
+    };
+
+    attachRowHandlers(host);
+    renderToolbar();
+  }
+
+  function renderSearchResults(){
+    var host = document.getElementById('content');
+    var q = searchQuery.toLowerCase();
+    var matches = tasks.filter(function(t){
+      return t.text.toLowerCase().indexOf(q) !== -1 || t.sponsor.toLowerCase().indexOf(q) !== -1;
+    }).sort(function(a,b){
+      if(a.status === 'done' && b.status !== 'done') return 1;
+      if(b.status === 'done' && a.status !== 'done') return -1;
+      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      return 0;
+    });
+    var rows = matches.length === 0
+      ? '<p class="empty-list">No tasks match "' + escapeHtml(searchQuery) + '".</p>'
+      : matches.map(function(t, idx){ return taskRowHtml(t, idx, true); }).join('');
+    host.innerHTML = '<h2 class="section-title" style="color:var(--myrtle);">Search results</h2><div class="task-list">' + rows + '</div>';
+    attachRowHandlers(host);
+  }
+
+  function render(){
+    renderTabs();
+    if(searchQuery.trim() !== ''){
+      renderSearchResults();
+      return;
+    }
+    if(activeTab === 'dashboard' || sponsors.indexOf(activeTab) === -1){
+      activeTab = 'dashboard';
+      renderDashboard();
+    } else {
+      renderSponsorTab(activeTab);
+    }
+  }
+
+  document.getElementById('newSponsorSave').onclick = function(){
+    var input = document.getElementById('newSponsorInput');
+    var name = input.value.trim();
+    if(!name) return;
+    if(sponsors.indexOf(name) === -1){
+      sponsors.push(name);
+      saveSponsors();
+    }
+    activeTab = name;
+    input.value = '';
+    document.getElementById('newSponsorRow').style.display = 'none';
+    render();
+  };
+  document.getElementById('newSponsorCancel').onclick = function(){
+    document.getElementById('newSponsorRow').style.display = 'none';
+  };
+  document.getElementById('newSponsorInput').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') document.getElementById('newSponsorSave').click();
+  });
+
+  var searchTimer = null;
+  document.getElementById('globalSearch').addEventListener('input', function(e){
+    clearTimeout(searchTimer);
+    var val = e.target.value;
+    searchTimer = setTimeout(function(){ searchQuery = val; selectedIds.clear(); render(); }, 150);
+  });
+
+  initLock();
+  load();
+})();
+</script>
+</body>
+</html>
