@@ -200,6 +200,7 @@
   5. Set SHARED_PASSWORD below to whatever password your team should use
 ===================================================================== -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 (function(){
@@ -233,6 +234,7 @@
     if(unlocked){
       document.getElementById('lockscreen').style.display = 'none';
       document.getElementById('mainWrap').style.display = 'block';
+      signInThenLoad();
       return;
     }
     var input = document.getElementById('lockInput');
@@ -243,6 +245,7 @@
         sessionStorage.setItem('prt-unlocked', 'yes');
         document.getElementById('lockscreen').style.display = 'none';
         document.getElementById('mainWrap').style.display = 'block';
+        signInThenLoad();
       } else {
         err.style.display = 'block';
         input.value = '';
@@ -252,6 +255,15 @@
     btn.onclick = tryUnlock;
     input.addEventListener('keydown', function(e){ if(e.key === 'Enter') tryUnlock(); });
     input.focus();
+  }
+
+  function signInThenLoad(){
+    setSyncStatus('Connecting…', false);
+    firebase.auth().signInAnonymously().then(function(){
+      load();
+    }).catch(function(err){
+      setSyncStatus('Auth error — check your Firebase Authentication setup (' + err.message + ')', true);
+    });
   }
 
   var TASKS_KEY = 'prt-tasks-v3';
@@ -675,7 +687,6 @@
   });
 
   initLock();
-  load();
 })();
 </script>
 </body>
