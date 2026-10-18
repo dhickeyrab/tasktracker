@@ -170,6 +170,23 @@
   .link-add-row button{ font-size:12px; padding:5px 10px; border:1px solid var(--tan); border-radius:6px; background:#fff; cursor:pointer; }
   .link-add-row button:hover{ background:var(--tan); }
   .no-links-note{ font-size:12px; color:var(--ink-soft); font-style:italic; }
+
+  .note-card{ background:var(--surface); border:1px solid var(--line); border-radius:8px; margin-bottom:10px; overflow:hidden; }
+  .note-head{ display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; }
+  .note-head:hover{ background:var(--surface-soft, #f7f5f0); }
+  .note-date{ font-size:12px; color:var(--ink-soft); white-space:nowrap; }
+  .note-title{ font-weight:600; font-size:14px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .note-body{ display:none; padding:0 14px 14px; }
+  .note-body.open{ display:block; }
+  .note-body textarea{ width:100%; min-height:140px; font-family:'Inter',sans-serif; font-size:13px; line-height:1.5; border:1px solid var(--tan); border-radius:6px; padding:10px; resize:vertical; box-sizing:border-box; }
+  .note-actions{ display:flex; justify-content:flex-end; margin-top:8px; }
+  .note-form{ display:grid; gap:8px; }
+  .note-form-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .note-form input[type=text]{ flex:1; min-width:160px; }
+  .note-form input, .note-form select, .note-form textarea{ font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; border:1px solid var(--tan); border-radius:6px; box-sizing:border-box; }
+  .note-form textarea{ width:100%; min-height:110px; resize:vertical; }
+  .note-filter{ margin:16px 0 12px; display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); }
+  .note-filter select{ font-size:12px; padding:5px 8px; border:1px solid var(--tan); border-radius:6px; }
 </style>
 </head>
 <body>
@@ -293,6 +310,9 @@
   var searchQuery = '';
   var selectedIds = new Set();
   var expandedIds = new Set();
+  var meetings = [];
+  var expandedMeetings = new Set();
+  var noteFilter = 'all';
   var dragSponsor = null;
 
   var WHEN_ORDER = { eow:0, thisweek:1, nextweek:2, later:3 };
@@ -345,6 +365,7 @@
       var data = doc.exists ? doc.data() : {};
       tasks = data.tasks ? JSON.parse(data.tasks) : [];
       sponsors = data.sponsors ? JSON.parse(data.sponsors) : [];
+      meetings = data.meetings ? JSON.parse(data.meetings) : [];
       tasks.forEach(function(t){
         if(sponsors.indexOf(t.sponsor) === -1) sponsors.push(t.sponsor);
         if(!WHEN_ORDER.hasOwnProperty(t.when)) t.when = 'thisweek';
@@ -372,11 +393,18 @@
     });
   }
 
+  function saveMeetings(){
+    DOC_REF.set({ meetings: JSON.stringify(meetings) }, { merge: true }).catch(function(err){
+      setSyncStatus('Save failed, check your connection', true);
+    });
+  }
+
   function tasksFor(sponsor){ return tasks.filter(function(t){ return t.sponsor === sponsor; }); }
 
   function renderTabs(){
     var bar = document.getElementById('tabbar');
     var html = '<button class="tab ' + (activeTab==='dashboard'?'active':'') + '" data-tab="dashboard">Dashboard</button>';
+    html += '<button class="tab ' + (activeTab==='__notes__'?'active':'') + '" data-tab="__notes__">Meeting notes</button>';
     sponsors.forEach(function(s){
       html += '<button class="tab ' + (activeTab===s?'active':'') + '" draggable="true" data-tab="' + escapeHtml(s) + '">' + escapeHtml(s) + '</button>';
     });
@@ -769,10 +797,111 @@
     attachRowHandlers(host);
   }
 
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function prettyDate(ds){
+    var p = (ds || '').split('-');
+    if(p.length !== 3) return ds || '';
+    var d = new Date(+p[0], +p[1]-1, +p[2]);
+    return d.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
+  }
+
+  function renderNotes(){
+    var host = document.getElementById('content');
+    var list = meetings.filter(function(m){
+      if(noteFilter === 'all') return true;
+      if(noteFilter === '__general__') return !m.sponsor;
+      return m.sponsor === noteFilter;
+    }).sort(function(a,b){
+      if(a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.ts||0) - (a.ts||0);
+    });
+
+    var cards = list.length === 0
+      ? '<p class="empty-list">No meeting notes yet.</p>'
+      : list.map(function(m){
+          var open = expandedMeetings.has(m.id);
+          return '<div class="note-card" data-note="' + m.id + '">' +
+            '<div class="note-head" data-toggle="' + m.id + '">' +
+              '<span>' + (open ? '&#9662;' : '&#9656;') + '</span>' +
+              '<span class="note-date">' + escapeHtml(prettyDate(m.date)) + '</span>' +
+              '<span class="note-title">' + escapeHtml(m.title || 'Untitled meeting') + '</span>' +
+              (m.sponsor ? '<span class="task-sponsor-tag">' + escapeHtml(m.sponsor) + '</span>' : '') +
+            '</div>' +
+            '<div class="note-body ' + (open ? 'open' : '') + '">' +
+              '<textarea data-notebody="' + m.id + '">' + escapeHtml(m.body || '') + '</textarea>' +
+              '<div class="note-actions"><button class="ghost-btn" data-notedel="' + m.id + '">Delete note</button></div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+    var filterOpts = '<option value="all"' + (noteFilter==='all'?' selected':'') + '>All notes</option>' +
+      '<option value="__general__"' + (noteFilter==='__general__'?' selected':'') + '>General</option>' +
+      sponsors.map(function(sp){ return '<option value="' + escapeHtml(sp) + '"' + (noteFilter===sp?' selected':'') + '>' + escapeHtml(sp) + '</option>'; }).join('');
+
+    host.innerHTML =
+      '<div class="add-panel"><div class="note-form">' +
+        '<div class="note-form-row">' +
+          '<input type="text" id="noteTitle" placeholder="Meeting title, e.g. Quarterly catch up">' +
+          '<select id="noteSponsor"><option value="">General</option>' + sponsorOptionsHtml() + '</select>' +
+          '<input type="date" id="noteDate" value="' + todayStr() + '">' +
+        '</div>' +
+        '<textarea id="noteBody" placeholder="Type your meeting notes here..."></textarea>' +
+        '<div><button id="noteSaveBtn" class="ghost-btn">Save note</button></div>' +
+      '</div></div>' +
+      '<div class="note-filter">Show <select id="noteFilter">' + filterOpts + '</select></div>' +
+      cards;
+
+    document.getElementById('noteSaveBtn').onclick = function(){
+      var body = document.getElementById('noteBody').value.trim();
+      var title = document.getElementById('noteTitle').value.trim();
+      if(!body && !title) return;
+      var m = {
+        id: uid(), title: title, body: body,
+        sponsor: document.getElementById('noteSponsor').value,
+        date: document.getElementById('noteDate').value || todayStr(),
+        ts: Date.now()
+      };
+      meetings.push(m);
+      expandedMeetings.add(m.id);
+      saveMeetings(); render();
+    };
+    document.getElementById('noteFilter').onchange = function(){ noteFilter = this.value; render(); };
+    host.querySelectorAll('[data-toggle]').forEach(function(el){
+      el.onclick = function(){
+        var id = el.getAttribute('data-toggle');
+        if(expandedMeetings.has(id)) expandedMeetings.delete(id); else expandedMeetings.add(id);
+        render();
+      };
+    });
+    host.querySelectorAll('[data-notebody]').forEach(function(el){
+      el.onblur = function(){
+        var id = el.getAttribute('data-notebody');
+        var m = meetings.find(function(x){ return x.id === id; });
+        if(m && m.body !== el.value){ m.body = el.value; saveMeetings(); }
+      };
+    });
+    host.querySelectorAll('[data-notedel]').forEach(function(el){
+      el.onclick = function(){
+        var id = el.getAttribute('data-notedel');
+        if(!confirm('Delete this meeting note?')) return;
+        meetings = meetings.filter(function(x){ return x.id !== id; });
+        expandedMeetings.delete(id);
+        saveMeetings(); render();
+      };
+    });
+  }
+
   function render(){
     renderTabs();
     if(searchQuery.trim() !== ''){
       renderSearchResults();
+      return;
+    }
+    if(activeTab === '__notes__'){
+      renderNotes();
       return;
     }
     if(activeTab === 'dashboard' || sponsors.indexOf(activeTab) === -1){
