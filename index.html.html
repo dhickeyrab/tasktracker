@@ -187,6 +187,17 @@
   .note-form textarea{ width:100%; min-height:110px; resize:vertical; }
   .note-filter{ margin:16px 0 12px; display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink-soft); }
   .note-filter select{ font-size:12px; padding:5px 8px; border:1px solid var(--tan); border-radius:6px; }
+
+  .ns-section{ margin-top:12px; padding-top:10px; border-top:1px dashed var(--tan); }
+  .ns-section h4{ font-family:'Oswald',sans-serif; font-size:13px; font-weight:500; margin:0 0 8px; color:var(--myrtle); }
+  .ns-item{ display:flex; align-items:center; gap:8px; font-size:13px; padding:4px 0; }
+  .ns-item .ns-status{ font-size:11px; color:var(--ink-soft); margin-left:auto; white-space:nowrap; }
+  .ns-item.done .ns-text{ text-decoration:line-through; color:var(--ink-soft); }
+  .ns-form{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .ns-form input[type=text]{ flex:1; min-width:160px; }
+  .ns-form input, .ns-form select{ font-family:'Inter',sans-serif; font-size:12px; padding:6px 8px; border:1px solid var(--tan); border-radius:6px; box-sizing:border-box; }
+  .ns-form button{ font-size:12px; padding:6px 12px; border:none; border-radius:6px; background:var(--myrtle); color:#fff; cursor:pointer; }
+  .ns-form button:hover{ background:var(--myrtle-dark); }
 </style>
 </head>
 <body>
@@ -808,6 +819,35 @@
     return d.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
   }
 
+  var STATUS_LABEL = { todo:'To do', progress:'In progress', waiting:'Waiting', done:'Done' };
+
+  function nextStepsHtml(m){
+    var made = tasks.filter(function(t){ return t.fromNote === m.id; });
+    var items = made.map(function(t){
+      return '<div class="ns-item ' + (t.status==='done' ? 'done' : '') + '">' +
+        '<span class="prio-dot ' + t.priority + '"></span>' +
+        '<span class="ns-text">' + escapeHtml(t.text) + '</span>' +
+        '<span class="task-sponsor-tag">' + escapeHtml(t.sponsor) + '</span>' +
+        '<span class="ns-status">' + escapeHtml(STATUS_LABEL[t.status] || '') + '</span>' +
+      '</div>';
+    }).join('');
+    var sponsorSel = '<select data-nssponsor="' + m.id + '">' +
+      (m.sponsor ? '' : '<option value="">Sponsor...</option>') +
+      sponsors.map(function(sp){ return '<option value="' + escapeHtml(sp) + '"' + (sp===m.sponsor?' selected':'') + '>' + escapeHtml(sp) + '</option>'; }).join('') +
+    '</select>';
+    return '<div class="ns-section">' +
+      '<h4>Next steps from this meeting</h4>' +
+      (items || '<p class="no-links-note">No tasks added from this note yet.</p>') +
+      '<div class="ns-form">' +
+        '<input type="text" data-nstext="' + m.id + '" placeholder="Add a next step...">' +
+        sponsorSel +
+        '<select data-nswhen="' + m.id + '"><option value="thisweek" selected>This week</option><option value="eow">EOW</option><option value="nextweek">Next week</option><option value="later">Later</option></select>' +
+        '<select data-nsprio="' + m.id + '"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>' +
+        '<button data-nsadd="' + m.id + '">Add task</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderNotes(){
     var host = document.getElementById('content');
     var list = meetings.filter(function(m){
@@ -832,6 +872,7 @@
             '</div>' +
             '<div class="note-body ' + (open ? 'open' : '') + '">' +
               '<textarea data-notebody="' + m.id + '">' + escapeHtml(m.body || '') + '</textarea>' +
+              nextStepsHtml(m) +
               '<div class="note-actions"><button class="ghost-btn" data-notedel="' + m.id + '">Delete note</button></div>' +
             '</div>' +
           '</div>';
@@ -882,6 +923,34 @@
         var m = meetings.find(function(x){ return x.id === id; });
         if(m && m.body !== el.value){ m.body = el.value; saveMeetings(); }
       };
+    });
+    function addNextStep(id){
+      var m = meetings.find(function(x){ return x.id === id; });
+      if(!m) return;
+      var textEl = host.querySelector('[data-nstext="' + id + '"]');
+      var spEl = host.querySelector('[data-nssponsor="' + id + '"]');
+      var text = textEl.value.trim();
+      if(!text){ textEl.focus(); return; }
+      if(!spEl.value){ spEl.focus(); return; }
+      tasks.push({
+        id: uid(), text: text, sponsor: spEl.value,
+        when: host.querySelector('[data-nswhen="' + id + '"]').value,
+        priority: host.querySelector('[data-nsprio="' + id + '"]').value,
+        status: 'todo', notes: '', links: [], fromNote: id
+      });
+      saveTasks(); render();
+      setTimeout(function(){
+        var again = document.querySelector('[data-nstext="' + id + '"]');
+        if(again) again.focus();
+      }, 30);
+    }
+    host.querySelectorAll('[data-nsadd]').forEach(function(el){
+      el.onclick = function(){ addNextStep(el.getAttribute('data-nsadd')); };
+    });
+    host.querySelectorAll('[data-nstext]').forEach(function(el){
+      el.addEventListener('keydown', function(e){
+        if(e.key === 'Enter'){ e.preventDefault(); addNextStep(el.getAttribute('data-nstext')); }
+      });
     });
     host.querySelectorAll('[data-notedel]').forEach(function(el){
       el.onclick = function(){
