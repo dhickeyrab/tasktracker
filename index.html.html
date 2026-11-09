@@ -299,6 +299,16 @@
   .fx-paste summary{ cursor:pointer; font-size:12.5px; color:var(--myrtle); }
   .fx-scroll{ overflow-x:auto; }
   .fx-table{ min-width:760px; }
+
+  .due-wrap{ position:relative; width:auto; min-width:78px; text-align:right; cursor:pointer; padding:2px 6px; border-radius:6px; white-space:nowrap; }
+  .due-wrap:hover{ background:var(--tan); }
+  .due-wrap.over{ color:var(--cardinal) !important; }
+  .due-wrap.nodate{ color:var(--ink-soft) !important; font-weight:500; }
+  .due-input{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .due-chips{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--ink-soft); }
+  .due-chips button{ font-family:'Inter',sans-serif; font-size:12px; padding:3px 10px; border:1px solid var(--tan); border-radius:12px; background:#fff; cursor:pointer; }
+  .due-chips button:hover{ background:var(--tan); }
+  .ns-form .due-chips{ margin-top:0; }
 </style>
 </head>
 <body>
@@ -466,14 +476,14 @@
     if(storedWeek && storedWeek !== currentWeek){
       var rolled = 0;
       tasks.forEach(function(t){
-        if(t.status === 'done') return;
+        if(t.status === 'done' || t.due) return;
         if(t.when === 'nextweek'){ t.when = 'thisweek'; rolled++; }
         else if(t.when === 'thisweek' || t.when === 'eow'){ t.when = 'thisweek'; rolled++; }
       });
       if(rolled > 0){
         saveTasks();
         var note = document.getElementById('rolloverNote');
-        note.textContent = 'New week — ' + rolled + ' task' + (rolled===1?'':'s') + ' rolled forward automatically.';
+        note.textContent = 'New week: ' + rolled + ' task' + (rolled===1?'':'s') + ' rolled forward automatically.';
         note.style.display = 'block';
       }
     }
@@ -499,6 +509,7 @@
       tasks.forEach(function(t){
         if(sponsors.indexOf(t.sponsor) === -1) sponsors.push(t.sponsor);
         if(!WHEN_ORDER.hasOwnProperty(t.when)) t.when = 'thisweek';
+        if(t.due) t.when = whenFromDue(t.due);
         if(typeof t.notes !== 'string') t.notes = '';
         if(!Array.isArray(t.links)) t.links = [];
       });
@@ -701,7 +712,7 @@
     var urgent = open.filter(function(t){
       return t.when === 'eow' || t.when === 'thisweek' || t.priority === 'high';
     }).sort(function(a,b){
-      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      if(a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1; if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when]; var dc = dueCmp(a, b); if(dc) return dc;
       var order = { high:0, medium:1, low:2 };
       return order[a.priority] - order[b.priority];
     });
@@ -712,7 +723,7 @@
           var cls = (t.when === 'eow' || t.priority === 'high') ? '' : 'medium';
           return '<div class="urgent-item ' + cls + '"><span class="tag">' + escapeHtml(t.sponsor) + '</span>' +
             '<span class="txt">' + escapeHtml(t.text) + '</span>' +
-            '<span class="when">' + WHEN_LABEL[t.when] + '</span></div>';
+            '<span class="when">' + escapeHtml(dueLabel(t).text) + '</span></div>';
         }).join('');
 
     var chaseList = open.filter(function(t){ return t.status === 'waiting' && t.waitingSince && daysSince(t.waitingSince) >= CHASE_DAYS; })
@@ -767,7 +778,7 @@
       }).join('') + '</div>';
 
     var allSorted = open.slice().sort(function(a,b){
-      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      if(a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1; if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when]; var dc = dueCmp(a, b); if(dc) return dc;
       var order = { high:0, medium:1, low:2 };
       return order[a.priority] - order[b.priority];
     });
@@ -787,11 +798,12 @@
         '<div class="add-row">' +
           '<input type="text" id="qaText" placeholder="Quick add a task...">' +
           '<select id="qaSponsor">' + sponsorOptionsHtml() + '</select>' +
-          '<select id="qaWhen"><option value="thisweek" selected>This week</option><option value="eow">EOW</option><option value="nextweek">Next week</option><option value="later">Later</option></select>' +
+          '<input type="date" id="qaDue" title="Due date (optional)">' +
           '<select id="qaPriority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>' +
           '<select id="qaStatus"><option value="todo">To do</option><option value="progress">In progress</option><option value="waiting">Waiting</option></select>' +
           '<button id="qaAddBtn">Add</button>' +
         '</div>' +
+        dueChipsHtml('#qaDue') +
         '<p class="field-err" id="qaErr">Enter a task before adding.</p>' +
       '</div>';
 
@@ -810,6 +822,7 @@
     });
     if(dashView === 'all') attachRowHandlers(host);
     attachChasedHandlers(host);
+    attachDueChips(host);
     host.querySelectorAll('[data-gohosp]').forEach(function(el){
       el.onclick = function(){ activeTab = el.getAttribute('data-gohosp'); sponsorView = 'hosp'; render(); };
     });
@@ -826,9 +839,10 @@
         var err = document.getElementById('qaErr');
         if(!text){ err.style.display = 'block'; return; }
         err.style.display = 'none';
+        var qaDueVal = document.getElementById('qaDue').value;
         tasks.push({
           id: uid(), text: text, sponsor: document.getElementById('qaSponsor').value,
-          when: document.getElementById('qaWhen').value, priority: document.getElementById('qaPriority').value,
+          due: qaDueVal, when: qaDueVal ? whenFromDue(qaDueVal) : 'later', priority: document.getElementById('qaPriority').value,
           status: document.getElementById('qaStatus').value, notes: '', links: []
         });
         setStatus(tasks[tasks.length-1], document.getElementById('qaStatus').value);
@@ -871,6 +885,80 @@
     });
   }
 
+  function parseYMD(str){ var p = str.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function dayDiff(str){
+    var a = parseYMD(str);
+    var n = new Date();
+    var b = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    return Math.round((a - b) / 86400000);
+  }
+  // Turns a real due date into the bucket the rest of the tracker uses (EOW, this week, next week, later)
+  function whenFromDue(str){
+    var diff = dayDiff(str);
+    var dow = (new Date().getDay() + 6) % 7; // Monday = 0
+    var toSunday = 6 - dow;
+    if(diff <= toSunday){
+      if(diff < 0) return 'eow';
+      var d = parseYMD(str).getDay();
+      return (d === 5 || d === 6 || d === 0) ? 'eow' : 'thisweek';
+    }
+    if(diff <= toSunday + 7) return 'nextweek';
+    return 'later';
+  }
+  function syncWhen(t){ if(t.due) t.when = whenFromDue(t.due); }
+  function dueCmp(a, b){
+    if(a.due && b.due) return a.due < b.due ? -1 : (a.due > b.due ? 1 : 0);
+    if(a.due) return -1;
+    if(b.due) return 1;
+    return 0;
+  }
+  function shortDate(str){
+    var d = parseYMD(str);
+    var out = d.toLocaleDateString('en-AU', { weekday: 'short' }) + ' ' + d.getDate() + ' ' + d.toLocaleDateString('en-AU', { month: 'short' });
+    if(d.getFullYear() !== new Date().getFullYear()) out += ' ' + d.getFullYear();
+    return out;
+  }
+  function dueLabel(t){
+    if(!t.due) return { text: t.when === 'later' ? 'No date' : WHEN_LABEL[t.when], nodate: t.when === 'later', over: false };
+    var diff = dayDiff(t.due);
+    if(t.status !== 'done' && diff < 0) return { text: 'Overdue, ' + shortDate(t.due), over: true };
+    if(diff === 0) return { text: 'Today', over: false };
+    if(diff === 1) return { text: 'Tomorrow', over: false };
+    return { text: shortDate(t.due), over: false };
+  }
+  function dueCellHtml(t){
+    var l = dueLabel(t);
+    return '<label class="task-when ' + t.when + ' due-wrap' + (l.over ? ' over' : '') + (l.nodate ? ' nodate' : '') + '" title="Click to set a due date">' +
+      '<span>' + escapeHtml(l.text) + '</span>' +
+      '<input type="date" class="due-input" data-dueid="' + t.id + '" value="' + escAttr(t.due || '') + '"></label>';
+  }
+  function chipDate(kind){
+    var d = new Date();
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if(kind === 'tomorrow') d.setDate(d.getDate() + 1);
+    else if(kind === 'fri'){ var add = (5 - d.getDay() + 7) % 7; d.setDate(d.getDate() + add); }
+    else if(kind === 'mon'){ var add2 = (8 - d.getDay()) % 7 || 7; d.setDate(d.getDate() + add2); }
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function dueChipsHtml(targetSelector){
+    return '<div class="due-chips" data-chipfor="' + escAttr(targetSelector) + '">Due:' +
+      '<button type="button" data-chip="today">Today</button>' +
+      '<button type="button" data-chip="tomorrow">Tomorrow</button>' +
+      '<button type="button" data-chip="fri">Friday</button>' +
+      '<button type="button" data-chip="mon">Next Monday</button>' +
+    '</div>';
+  }
+  function attachDueChips(host){
+    host.querySelectorAll('.due-chips').forEach(function(box){
+      box.querySelectorAll('[data-chip]').forEach(function(btn){
+        btn.onclick = function(){
+          var inp = document.querySelector(box.getAttribute('data-chipfor'));
+          if(inp){ inp.value = chipDate(btn.getAttribute('data-chip')); }
+        };
+      });
+    });
+  }
+
   function taskById(id){
     return tasks.find(function(x){ return x.id === id; });
   }
@@ -888,7 +976,7 @@
       '<span class="prio-dot ' + t.priority + '" title="' + t.priority + ' priority"></span>' +
       '<span class="task-text">' + escapeHtml(t.text) + '</span>' +
       (showSponsorTag ? '<span class="task-sponsor-tag">' + escapeHtml(t.sponsor) + '</span>' : '') +
-      '<span class="task-when ' + t.when + '">' + WHEN_LABEL[t.when] + '</span>' +
+      dueCellHtml(t) +
       waitBadgeHtml(t) +
       '<select class="status ' + t.status + '" data-id="' + t.id + '">' +
         '<option value="todo"' + (t.status==='todo'?' selected':'') + '>To do</option>' +
@@ -931,6 +1019,17 @@
 
   function attachRowHandlers(host){
     attachChasedHandlers(host);
+    attachDueChips(host);
+    host.querySelectorAll('.due-input').forEach(function(el){
+      el.onclick = function(){ if(el.showPicker){ try{ el.showPicker(); }catch(e){} } };
+      el.onchange = function(){
+        var t = taskById(el.getAttribute('data-dueid'));
+        if(!t) return;
+        if(el.value){ t.due = el.value; syncWhen(t); }
+        else { t.due = ''; t.when = 'later'; }
+        saveTasks(); render();
+      };
+    });
     host.querySelectorAll('select.status').forEach(function(el){
       el.onchange = function(){
         var id = el.getAttribute('data-id');
@@ -1027,15 +1126,21 @@
   }
 
   function buildSummary(sponsor){
-    var list = tasksFor(sponsor).filter(function(t){ return t.status !== 'done'; });
-    var lines = [sponsor + ' — task update'];
+    var list = tasksFor(sponsor).filter(function(t){ return t.status !== 'done'; }).sort(function(a, b){ return dueCmp(a, b); });
+    var lines = [sponsor + ': task update'];
     if(list.length === 0){ lines.push('', 'Nothing open.'); return lines.join('\n'); }
-    ['eow','thisweek','nextweek','later'].forEach(function(bucket){
-      var items = list.filter(function(t){ return t.when === bucket; });
+    function bucket(t){
+      if(t.due && t.due < todayStr()) return 'Overdue';
+      if(t.when === 'eow' || t.when === 'thisweek') return 'This week';
+      if(t.when === 'nextweek') return 'Next week';
+      return 'Later';
+    }
+    ['Overdue', 'This week', 'Next week', 'Later'].forEach(function(name){
+      var items = list.filter(function(t){ return bucket(t) === name; });
       if(items.length === 0) return;
-      lines.push('', WHEN_LABEL[bucket] + ':');
+      lines.push('', name + ':');
       items.forEach(function(t){
-        lines.push('- ' + t.text + (t.priority === 'high' ? ' (high priority)' : '') + (t.status === 'waiting' ? ' [waiting on partner/other]' : ''));
+        lines.push('- ' + t.text + (t.due ? ' (due ' + shortDate(t.due) + ')' : '') + (t.priority === 'high' ? ' (high priority)' : '') + (t.status === 'waiting' ? ' [waiting on partner/other]' : ''));
       });
     });
     return lines.join('\n');
@@ -2034,7 +2139,7 @@
     var list = tasksFor(sponsor).slice().sort(function(a,b){
       if(a.status === 'done' && b.status !== 'done') return 1;
       if(b.status === 'done' && a.status !== 'done') return -1;
-      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      if(a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1; if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when]; var dc = dueCmp(a, b); if(dc) return dc;
       var order = { high:0, medium:1, low:2 };
       return order[a.priority] - order[b.priority];
     });
@@ -2047,11 +2152,12 @@
       '<div class="add-panel">' +
         '<div class="add-row no-sponsor">' +
           '<input type="text" id="taskText" placeholder="Task, e.g. Draft halftime recap email">' +
-          '<select id="taskWhen"><option value="thisweek" selected>This week</option><option value="eow">EOW</option><option value="nextweek">Next week</option><option value="later">Later</option></select>' +
+          '<input type="date" id="taskDue" title="Due date (optional)">' +
           '<select id="taskPriority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>' +
           '<select id="taskStatus"><option value="todo">To do</option><option value="progress">In progress</option><option value="waiting">Waiting</option></select>' +
           '<button id="addBtn">Add task</button>' +
         '</div>' +
+        dueChipsHtml('#taskDue') +
         '<p class="field-err" id="fieldErr">Enter a task before adding.</p>' +
       '</div>' +
       '<div class="tab-toolbar">' +
@@ -2069,9 +2175,10 @@
       var err = document.getElementById('fieldErr');
       if(!text){ err.style.display = 'block'; return; }
       err.style.display = 'none';
+      var taskDueVal = document.getElementById('taskDue').value;
       tasks.push({
         id: uid(), text: text, sponsor: sponsor,
-        when: document.getElementById('taskWhen').value, priority: document.getElementById('taskPriority').value,
+        due: taskDueVal, when: taskDueVal ? whenFromDue(taskDueVal) : 'later', priority: document.getElementById('taskPriority').value,
         status: document.getElementById('taskStatus').value, notes: '', links: []
       });
       setStatus(tasks[tasks.length-1], document.getElementById('taskStatus').value);
@@ -2115,7 +2222,7 @@
     }).sort(function(a,b){
       if(a.status === 'done' && b.status !== 'done') return 1;
       if(b.status === 'done' && a.status !== 'done') return -1;
-      if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when];
+      if(a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1; if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when]; var dc = dueCmp(a, b); if(dc) return dc;
       return 0;
     });
     var rows = matches.length === 0
@@ -2158,7 +2265,8 @@
       '<div class="ns-form">' +
         '<input type="text" data-nstext="' + m.id + '" placeholder="Add a next step...">' +
         sponsorSel +
-        '<select data-nswhen="' + m.id + '"><option value="thisweek" selected>This week</option><option value="eow">EOW</option><option value="nextweek">Next week</option><option value="later">Later</option></select>' +
+        '<input type="date" data-nsdue="' + m.id + '" title="Due date (optional)">' +
+        dueChipsHtml('[data-nsdue="' + m.id + '"]') +
         '<select data-nsprio="' + m.id + '"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>' +
         '<button data-nsadd="' + m.id + '">Add task</button>' +
       '</div>' +
@@ -2249,9 +2357,10 @@
       var text = textEl.value.trim();
       if(!text){ textEl.focus(); return; }
       if(!spEl.value){ spEl.focus(); return; }
+      var nsDueVal = host.querySelector('[data-nsdue="' + id + '"]').value;
       tasks.push({
         id: uid(), text: text, sponsor: spEl.value,
-        when: host.querySelector('[data-nswhen="' + id + '"]').value,
+        due: nsDueVal, when: nsDueVal ? whenFromDue(nsDueVal) : 'later',
         priority: host.querySelector('[data-nsprio="' + id + '"]').value,
         status: 'todo', notes: '', links: [], fromNote: id
       });
@@ -2261,6 +2370,7 @@
         if(again) again.focus();
       }, 30);
     }
+    attachDueChips(host);
     host.querySelectorAll('[data-nsadd]').forEach(function(el){
       el.onclick = function(){ addNextStep(el.getAttribute('data-nsadd')); };
     });
@@ -2281,6 +2391,7 @@
   }
 
   function render(){
+    tasks.forEach(syncWhen);
     renderTabs();
     if(searchQuery.trim() !== ''){
       renderSearchResults();
