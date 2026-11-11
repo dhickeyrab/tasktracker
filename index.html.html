@@ -309,6 +309,37 @@
   .due-chips button{ font-family:'Inter',sans-serif; font-size:12px; padding:3px 10px; border:1px solid var(--tan); border-radius:12px; background:#fff; cursor:pointer; }
   .due-chips button:hover{ background:var(--tan); }
   .ns-form .due-chips{ margin-top:0; }
+
+  .task-row.flash{ animation:rowflash 2.4s ease-out; }
+  @keyframes rowflash{ 0%{ box-shadow:0 0 0 3px var(--gold); } 70%{ box-shadow:0 0 0 3px var(--gold); } 100%{ box-shadow:0 0 0 0 transparent; } }
+
+  .flash{ animation:rowflash 2.4s ease-out; }
+  mark{ background:#ffe9a8; padding:0 1px; border-radius:2px; color:inherit; }
+  .pinfo{ background:var(--surface); border:1px solid var(--line); border-radius:8px; margin-bottom:14px; }
+  .pinfo-head{ display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; flex-wrap:wrap; }
+  .pinfo-head:hover{ background:var(--surface-soft, #f7f5f0); }
+  .pinfo-title{ font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:.5px; color:var(--myrtle); }
+  .pinfo-sum{ font-size:12.5px; color:var(--ink-soft); }
+  .pinfo-sum.soon{ color:#7A5C0B; font-weight:600; }
+  .pinfo-sum.urgent{ color:var(--cardinal); font-weight:600; }
+  .pinfo-body{ padding:4px 14px 14px; border-top:1px solid var(--line); }
+  .pinfo-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin-top:10px; }
+  .pinfo label, .pinfo .pl{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin:10px 0 4px; }
+  .pinfo-grid label{ margin-top:0; }
+  .pinfo input, .pinfo textarea{ font-family:'Inter',sans-serif; font-size:13px; padding:7px 9px; border:1px solid var(--tan); border-radius:6px; width:100%; box-sizing:border-box; }
+  .pinfo textarea{ min-height:64px; resize:vertical; }
+  .pc-row{ display:grid; grid-template-columns:1.2fr 1fr 1.6fr 1fr 28px; gap:8px; align-items:center; margin-bottom:6px; }
+  .pc-row a{ font-size:12px; color:var(--myrtle); }
+  .pc-add{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .pc-add input{ flex:1; min-width:120px; width:auto; }
+  .pc-add button{ font-size:12.5px; padding:7px 14px; border:none; border-radius:6px; background:var(--myrtle); color:#fff; cursor:pointer; }
+  .sr-section{ margin-bottom:22px; }
+  .sr-item{ display:flex; gap:10px; align-items:flex-start; padding:9px 12px; background:var(--surface); border:1px solid var(--line); border-radius:6px; margin-bottom:6px; cursor:pointer; }
+  .sr-item:hover{ background:var(--surface-soft, #f7f5f0); }
+  .sr-type{ font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; background:var(--tan); border-radius:10px; padding:2px 8px; white-space:nowrap; margin-top:2px; }
+  .sr-title{ font-size:13.5px; font-weight:600; }
+  .sr-snip{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; line-height:1.4; }
+  .sr-more{ font-size:12px; color:var(--ink-soft); font-style:italic; margin:4px 2px; }
 </style>
 </head>
 <body>
@@ -330,7 +361,7 @@
       <p class="eyebrow">South Sydney Rabbitohs · Partnerships</p>
       <h1>Task tracker</h1>
     </div>
-    <div class="search-box"><input type="text" id="globalSearch" placeholder="Search all tasks..."></div>
+    <div class="search-box"><input type="text" id="globalSearch" placeholder="Search everything..."></div>
   </div>
 
   <p class="rollover-note" id="rolloverNote"></p>
@@ -437,6 +468,8 @@
   var expandedIds = new Set();
   var dashView = 'attention';
   var wip = {};
+  var partnerInfo = {};
+  var infoOpen = new Set();
   var fixtures = { games: [], events: [] };
   var hosp = {};
   var tabCats = {};
@@ -506,6 +539,7 @@
       if(!fixtures.games) fixtures.games = [];
       if(!fixtures.events) fixtures.events = [];
       hosp = data.hosp ? JSON.parse(data.hosp) : {};
+      partnerInfo = data.partnerInfo ? JSON.parse(data.partnerInfo) : {};
       tasks.forEach(function(t){
         if(sponsors.indexOf(t.sponsor) === -1) sponsors.push(t.sponsor);
         if(!WHEN_ORDER.hasOwnProperty(t.when)) t.when = 'thisweek';
@@ -721,7 +755,7 @@
       ? '<p class="urgent-empty">Nothing due this week or marked high priority.</p>'
       : urgent.map(function(t){
           var cls = (t.when === 'eow' || t.priority === 'high') ? '' : 'medium';
-          return '<div class="urgent-item ' + cls + '"><span class="tag">' + escapeHtml(t.sponsor) + '</span>' +
+          return '<div class="urgent-item clickable ' + cls + '" data-gotask="' + t.id + '" title="Open this task"><span class="tag">' + escapeHtml(t.sponsor) + '</span>' +
             '<span class="txt">' + escapeHtml(t.text) + '</span>' +
             '<span class="when">' + escapeHtml(dueLabel(t).text) + '</span></div>';
         }).join('');
@@ -731,7 +765,7 @@
     var chaseHtml = chaseList.length === 0 ? '' :
       '<div class="urgent-strip"><h2 class="section-title" style="color:#7A5C0B;">Time to chase (' + chaseList.length + ')</h2>' +
       chaseList.map(function(t){
-        return '<div class="urgent-item chase"><span class="tag">' + escapeHtml(t.sponsor) + '</span>' +
+        return '<div class="urgent-item chase clickable" data-gotask="' + t.id + '" title="Open this task"><span class="tag">' + escapeHtml(t.sponsor) + '</span>' +
           '<span class="txt">' + escapeHtml(t.text) + '</span>' +
           '<span class="when">Waiting ' + daysSince(t.waitingSince) + ' days</span>' +
           '<button class="chased-btn" data-chased="' + t.id + '">Chased</button></div>';
@@ -777,6 +811,23 @@
           '<span class="when">Due ' + escapeHtml(prettyDate(u.date)) + '</span></div>';
       }).join('') + '</div>';
 
+    var renewList = [];
+    tabsIn('sponsor').forEach(function(sp){
+      var pi = infoFor(sp);
+      if(!pi.end) return;
+      var dd = dayDiff(pi.end);
+      if(dd >= -30 && dd <= 180) renewList.push({ sponsor: sp, end: pi.end, dd: dd });
+    });
+    renewList.sort(function(a,b){ return a.end < b.end ? -1 : 1; });
+    var renewHtml = renewList.length === 0 ? '' :
+      '<div class="urgent-strip"><h2 class="section-title" style="color:var(--myrtle);">Contracts ending soon (' + renewList.length + ')</h2>' +
+      renewList.map(function(r){
+        return '<div class="urgent-item clickable ' + (r.dd < 90 ? '' : 'medium') + '" data-gosponsor="' + escAttr(r.sponsor) + '">' +
+          '<span class="tag">' + escapeHtml(r.sponsor) + '</span>' +
+          '<span class="txt">' + (r.dd < 0 ? 'Contract ended' : 'Contract ends') + ' ' + escapeHtml(prettyDate(r.end)) + '</span>' +
+          '<span class="when">' + (r.dd < 0 ? 'Ended' : 'In ' + r.dd + (r.dd === 1 ? ' day' : ' days')) + '</span></div>';
+      }).join('') + '</div>';
+
     var allSorted = open.slice().sort(function(a,b){
       if(a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1; if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when]; var dc = dueCmp(a, b); if(dc) return dc;
       var order = { high:0, medium:1, low:2 };
@@ -814,7 +865,7 @@
       '</div>' +
       (dashView === 'all'
         ? '<div class="urgent-strip"><div class="task-list">' + allOpenHtml + '</div></div>'
-        : '<div class="urgent-strip"><h2 class="section-title" style="color:var(--cardinal);">Needs attention</h2>' + urgentHtml + '</div>' + chaseHtml + upcomingHtml + rsvpHtml) +
+        : '<div class="urgent-strip"><h2 class="section-title" style="color:var(--cardinal);">Needs attention</h2>' + urgentHtml + '</div>' + chaseHtml + upcomingHtml + rsvpHtml + renewHtml) +
       (cardsHtml || '<p class="empty-list">No tabs yet. Open Sponsors or Other Projects above and use the + button to add one.</p>');
 
     host.querySelectorAll('[data-dashview]').forEach(function(b){
@@ -822,7 +873,11 @@
     });
     if(dashView === 'all') attachRowHandlers(host);
     attachChasedHandlers(host);
+    attachTaskJumps(host);
     attachDueChips(host);
+    host.querySelectorAll('[data-gosponsor]').forEach(function(el){
+      el.onclick = function(){ goToResult('info', el.getAttribute('data-gosponsor'), el.getAttribute('data-gosponsor')); };
+    });
     host.querySelectorAll('[data-gohosp]').forEach(function(el){
       el.onclick = function(){ activeTab = el.getAttribute('data-gohosp'); sponsorView = 'hosp'; render(); };
     });
@@ -875,6 +930,31 @@
       (d === 0 ? 'Waiting today' : 'Waiting ' + d + 'd') + '</span>' +
       '<button class="chased-btn" data-chased="' + t.id + '" title="Reset the waiting clock">Chased</button>';
   }
+  function jumpToTask(id){
+    var t = taskById(id);
+    if(!t) return;
+    selectedIds.clear();
+    sponsorView = 'tasks';
+    expandedIds.add(id);
+    activeTab = t.sponsor;
+    document.getElementById('globalSearch').value = '';
+    searchQuery = '';
+    render();
+    setTimeout(function(){
+      var row = document.querySelector('.task-row[data-id="' + id + '"]');
+      if(row){
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('flash');
+        setTimeout(function(){ row.classList.remove('flash'); }, 2500);
+      }
+    }, 60);
+  }
+  function attachTaskJumps(host){
+    host.querySelectorAll('[data-gotask]').forEach(function(el){
+      el.onclick = function(){ jumpToTask(el.getAttribute('data-gotask')); };
+    });
+  }
+
   function attachChasedHandlers(host){
     host.querySelectorAll('[data-chased]').forEach(function(el){
       el.onclick = function(e){
@@ -1247,9 +1327,10 @@
       '<select data-movecat="' + escAttr(sponsor) + '">' +
         CATS.map(function(c){ return '<option value="' + c.id + '"' + (catOf(sponsor)===c.id?' selected':'') + '>' + c.single + '</option>'; }).join('') +
       '</select></label>';
-    return '<div class="tab-head">' + toggle + move + '</div>';
+    return '<div class="tab-head">' + toggle + move + '</div>' + (catOf(sponsor) === 'sponsor' ? partnerInfoHtml(sponsor) : '');
   }
   function attachSponsorToggle(host){
+    attachPartnerInfo(host);
     host.querySelectorAll('[data-movecat]').forEach(function(sel){
       sel.onchange = function(){
         moveTabToCat(sel.getAttribute('data-movecat'), sel.value);
@@ -1270,7 +1351,7 @@
       [],
       ['Partner', sponsor],
       ['Category Designation', info.designation || ''],
-      ['Contact', info.contacts || ''],
+      ['Contact', contactsText(sponsor)],
       ['Sponsor Objectives', info.objectives || ''],
       [],
       ['Category', 'Contracted Deliverables', 'Quantity', 'Responsibility', 'Actions', 'Progress', 'Additional Comments', 'Due Date']
@@ -1797,6 +1878,13 @@
           ['designation', 'contacts', 'objectives'].forEach(function(k){
             if(parsed.info[k]) target.info[k] = parsed.info[k];
           });
+          var pinfo = infoEnsure(sponsor);
+          if(parsed.info.contacts && pinfo.contacts.length === 0){
+            parsed.info.contacts.split(/\s*(?:,|;|\band\b|&)\s*/i).filter(Boolean).forEach(function(nm){
+              pinfo.contacts.push({ id: uid(), name: nm, role: '', email: '', phone: '' });
+            });
+            savePartnerInfo();
+          }
         }
         if(parsedH) applyHospImport(sponsor, parsedH);
         wipFilter = 'all';
@@ -1834,7 +1922,7 @@
     function usedText(fid){ var n = usedBy(fid); return n === 0 ? 'Not used yet' : n + (n === 1 ? ' partner' : ' partners'); }
 
     var gameRows = games.map(function(g){
-      return '<div class="fx-grid fx-games">' +
+      return '<div class="fx-grid fx-games" data-fxrow="' + g.id + '">' +
         '<input data-fk="game" data-fid="' + g.id + '" data-ff="round" value="' + escAttr(g.round || '') + '">' +
         '<input data-fk="game" data-fid="' + g.id + '" data-ff="opponent" value="' + escAttr(g.opponent || '') + '">' +
         '<input data-fk="game" data-fid="' + g.id + '" data-ff="venue" value="' + escAttr(g.venue || '') + '">' +
@@ -1845,7 +1933,7 @@
       '</div>';
     }).join('');
     var eventRows = events.map(function(e){
-      return '<div class="fx-grid fx-events">' +
+      return '<div class="fx-grid fx-events" data-fxrow="' + e.id + '">' +
         '<input data-fk="event" data-fid="' + e.id + '" data-ff="name" value="' + escAttr(e.name || '') + '">' +
         '<input data-fk="event" data-fid="' + e.id + '" data-ff="venue" value="' + escAttr(e.venue || '') + '">' +
         '<input type="date" data-fk="event" data-fid="' + e.id + '" data-ff="date" value="' + escAttr(e.date || '') + '">' +
@@ -1996,7 +2084,7 @@
     }
     var gameRows = myGames.map(function(g){
       var r = rowsMap[g.id];
-      return '<div class="hosp-grid" style="' + gameStyle + '">' +
+      return '<div class="hosp-grid" data-hrow="' + g.id + '" style="' + gameStyle + '">' +
         '<span>' + escapeHtml(g.round || '') + '</span>' +
         '<span>' + escapeHtml(g.opponent || '') + '</span>' +
         '<span>' + escapeHtml(g.venue || '') + '</span>' +
@@ -2009,7 +2097,7 @@
     }).join('');
     var eventRows = myEvents.map(function(e){
       var r = rowsMap[e.id];
-      return '<div class="hosp-grid" style="' + eventStyle + '">' +
+      return '<div class="hosp-grid" data-hrow="' + e.id + '" style="' + eventStyle + '">' +
         '<span>' + escapeHtml(e.name || '') + '</span>' +
         '<span>' + escapeHtml(e.venue || '') + '</span>' +
         '<span>' + escapeHtml(fmtDateTime(e.date, e.time)) + '</span>' +
@@ -2214,22 +2302,292 @@
     renderToolbar();
   }
 
+
+
+  function savePartnerInfo(){
+    DOC_REF.set({ partnerInfo: JSON.stringify(partnerInfo) }, { merge: true }).catch(function(err){
+      setSyncStatus('Save failed, check your connection', true);
+    });
+  }
+  function infoFor(sp){
+    var pi = partnerInfo[sp] || {};
+    return { start: pi.start || '', end: pi.end || '', notes: pi.notes || '', contacts: pi.contacts || [] };
+  }
+  function infoEnsure(sp){
+    if(!partnerInfo[sp]) partnerInfo[sp] = { start: '', end: '', notes: '', contacts: [] };
+    if(!partnerInfo[sp].contacts) partnerInfo[sp].contacts = [];
+    return partnerInfo[sp];
+  }
+  function contactsText(sp){
+    var c = infoFor(sp).contacts;
+    if(c.length) return c.map(function(x){ return x.name; }).filter(Boolean).join(', ');
+    return (wip[sp] && wip[sp].info && wip[sp].info.contacts) || '';
+  }
+  function flashSelector(sel){
+    setTimeout(function(){
+      var el = document.querySelector(sel);
+      if(!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('flash');
+      setTimeout(function(){ el.classList.remove('flash'); }, 2500);
+    }, 60);
+  }
+
+  function contractSummary(sp){
+    var pi = infoFor(sp);
+    if(!pi.end) return { text: '', cls: '' };
+    var dd = dayDiff(pi.end);
+    var text = dd < 0 ? 'Contract ended ' + prettyDate(pi.end) : 'Contract ends ' + prettyDate(pi.end) + ' (in ' + dd + (dd === 1 ? ' day)' : ' days)');
+    return { text: text, cls: dd < 90 ? 'urgent' : (dd < 180 ? 'soon' : '') };
+  }
+
+  function partnerInfoHtml(sp){
+    var pi = infoFor(sp);
+    var w = (wip[sp] && wip[sp].info) ? wip[sp].info : {};
+    var open = infoOpen.has(sp);
+    var cs = contractSummary(sp);
+    var bits = [];
+    if(cs.text) bits.push('<span class="pinfo-sum ' + cs.cls + '">' + escapeHtml(cs.text) + '</span>');
+    if(pi.contacts.length){
+      var c0 = pi.contacts[0];
+      bits.push('<span class="pinfo-sum">Contact: ' + escapeHtml(c0.name || c0.email || '') + (pi.contacts.length > 1 ? ' +' + (pi.contacts.length - 1) : '') + '</span>');
+    }
+    if(!bits.length) bits.push('<span class="pinfo-sum">Add contacts, contract dates and key notes</span>');
+    var head = '<div class="pinfo-head" data-pinfotoggle="' + escAttr(sp) + '"><span>' + (open ? '&#9662;' : '&#9656;') + '</span><span class="pinfo-title">Partner info</span>' + bits.join('') + '</div>';
+    if(!open) return '<div class="pinfo" data-pinfo="' + escAttr(sp) + '">' + head + '</div>';
+
+    var contactRows = pi.contacts.map(function(c){
+      return '<div class="pc-row">' +
+        '<input data-pc="name" data-cid="' + c.id + '" value="' + escAttr(c.name || '') + '" placeholder="Name">' +
+        '<input data-pc="role" data-cid="' + c.id + '" value="' + escAttr(c.role || '') + '" placeholder="Role">' +
+        '<div><input data-pc="email" data-cid="' + c.id + '" value="' + escAttr(c.email || '') + '" placeholder="Email">' + (c.email ? '<a href="mailto:' + escAttr(c.email) + '">Email</a>' : '') + '</div>' +
+        '<input data-pc="phone" data-cid="' + c.id + '" value="' + escAttr(c.phone || '') + '" placeholder="Phone">' +
+        '<button class="wip-del" data-pcdel="' + c.id + '" aria-label="Remove contact">&#10005;</button>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="pinfo" data-pinfo="' + escAttr(sp) + '">' + head +
+      '<div class="pinfo-body">' +
+        '<div class="pinfo-grid">' +
+          '<div><label>Contract start</label><input type="date" data-pf="start" value="' + escAttr(pi.start) + '"></div>' +
+          '<div><label>Contract end</label><input type="date" data-pf="end" value="' + escAttr(pi.end) + '"></div>' +
+          '<div><label>Category designation</label><input data-pw="designation" value="' + escAttr(w.designation || '') + '" placeholder="e.g. Official Travel Partner"></div>' +
+        '</div>' +
+        '<span class="pl">Sponsor objectives</span><textarea data-pw="objectives" placeholder="What the partner wants to achieve">' + escapeHtml(w.objectives || '') + '</textarea>' +
+        '<span class="pl">Contacts</span>' + contactRows +
+        '<div class="pc-add">' +
+          '<input id="pcName" placeholder="Name"><input id="pcRole" placeholder="Role"><input id="pcEmail" placeholder="Email"><input id="pcPhone" placeholder="Phone">' +
+          '<button id="pcAddBtn">Add contact</button>' +
+        '</div>' +
+        '<span class="pl">Key things to remember</span><textarea data-pf="notes" placeholder="Preferences, sensitivities, approval steps, anything worth knowing before you contact them">' + escapeHtml(pi.notes) + '</textarea>' +
+      '</div></div>';
+  }
+
+  function attachPartnerInfo(host){
+    var root = host.querySelector('.pinfo');
+    if(!root) return;
+    var sp = root.getAttribute('data-pinfo');
+    root.querySelector('[data-pinfotoggle]').onclick = function(){
+      if(infoOpen.has(sp)) infoOpen.delete(sp); else infoOpen.add(sp);
+      render();
+    };
+    root.querySelectorAll('[data-pf]').forEach(function(el){
+      el.onchange = function(){
+        infoEnsure(sp)[el.getAttribute('data-pf')] = el.value;
+        savePartnerInfo();
+        if(el.type === 'date') render();
+      };
+    });
+    root.querySelectorAll('[data-pw]').forEach(function(el){
+      el.onchange = function(){ wipEnsure(sp).info[el.getAttribute('data-pw')] = el.value; saveWip(); };
+    });
+    root.querySelectorAll('[data-pc]').forEach(function(el){
+      el.onchange = function(){
+        var c = infoEnsure(sp).contacts.filter(function(x){ return x.id === el.getAttribute('data-cid'); })[0];
+        if(c){ c[el.getAttribute('data-pc')] = el.value; savePartnerInfo(); if(el.getAttribute('data-pc') === 'email') render(); }
+      };
+    });
+    root.querySelectorAll('[data-pcdel]').forEach(function(el){
+      el.onclick = function(){
+        var pi = infoEnsure(sp);
+        pi.contacts = pi.contacts.filter(function(x){ return x.id !== el.getAttribute('data-pcdel'); });
+        savePartnerInfo(); render();
+      };
+    });
+    var add = document.getElementById('pcAddBtn');
+    if(add){
+      var doAdd = function(){
+        var name = document.getElementById('pcName').value.trim();
+        var email = document.getElementById('pcEmail').value.trim();
+        if(!name && !email){ document.getElementById('pcName').focus(); return; }
+        infoEnsure(sp).contacts.push({ id: uid(), name: name, role: document.getElementById('pcRole').value.trim(), email: email, phone: document.getElementById('pcPhone').value.trim() });
+        savePartnerInfo(); render();
+      };
+      add.onclick = doAdd;
+      ['pcName','pcRole','pcEmail','pcPhone'].forEach(function(id){
+        document.getElementById(id).addEventListener('keydown', function(e){ if(e.key === 'Enter') doAdd(); });
+      });
+    }
+  }
+
+  // ---------- search across everything ----------
+  function searchTokens(q){ return q.toLowerCase().split(/\s+/).filter(Boolean); }
+  function hayOf(parts){ return parts.filter(function(x){ return x !== undefined && x !== null && x !== ''; }).join(' \n ').toLowerCase(); }
+  function hasAll(tk, h){ return tk.every(function(t){ return h.indexOf(t) !== -1; }); }
+  function highlight(text, tk){
+    var out = '', i = 0;
+    var low = text.toLowerCase();
+    while(i < text.length){
+      var best = -1, bestLen = 0;
+      tk.forEach(function(t){
+        var at = low.indexOf(t, i);
+        if(at !== -1 && (best === -1 || at < best)){ best = at; bestLen = t.length; }
+      });
+      if(best === -1){ out += escapeHtml(text.slice(i)); break; }
+      out += escapeHtml(text.slice(i, best)) + '<mark>' + escapeHtml(text.slice(best, best + bestLen)) + '</mark>';
+      i = best + bestLen;
+    }
+    return out;
+  }
+  function snippetHtml(text, tk){
+    text = String(text || '').replace(/\s+/g, ' ').trim();
+    if(!text) return '';
+    var low = text.toLowerCase(), idx = -1;
+    tk.forEach(function(t){ var at = low.indexOf(t); if(at !== -1 && (idx === -1 || at < idx)) idx = at; });
+    if(idx === -1) return escapeHtml(text.slice(0, 110)) + (text.length > 110 ? '...' : '');
+    var start = Math.max(0, idx - 40), end = Math.min(text.length, idx + 100);
+    return (start > 0 ? '...' : '') + highlight(text.slice(start, end), tk) + (end < text.length ? '...' : '');
+  }
+  function bestSnippet(fields, tk){
+    for(var i = 0; i < fields.length; i++){
+      var f = String(fields[i] || '').toLowerCase();
+      if(f && tk.some(function(t){ return f.indexOf(t) !== -1; })) return snippetHtml(fields[i], tk);
+    }
+    return snippetHtml(fields[0] || '', tk);
+  }
+
+  function goToResult(type, id, sp){
+    selectedIds.clear();
+    document.getElementById('globalSearch').value = '';
+    searchQuery = '';
+    document.getElementById('newSponsorRow').style.display = 'none';
+    var flash = '';
+    if(type === 'note'){
+      activeTab = '__notes__'; noteFilter = 'all'; expandedMeetings.add(id);
+      flash = '.note-card[data-note="' + id + '"]';
+    } else if(type === 'deliv'){
+      activeTab = sp; sponsorView = 'wip'; wipFilter = 'all';
+      var it = wipItemsFor(sp).filter(function(x){ return x.id === id; })[0];
+      if(it) wipCatOpen[sp + '|' + (it.category || 'General')] = true;
+      flash = '.wip-row[data-wid="' + id + '"]';
+    } else if(type === 'hosp'){
+      activeTab = sp; sponsorView = 'hosp';
+      flash = '[data-hrow="' + id + '"]';
+    } else if(type === 'fixture'){
+      activeTab = '__fixtures__';
+      flash = '[data-fxrow="' + id + '"]';
+    } else if(type === 'info'){
+      activeTab = sp; sponsorView = 'tasks'; infoOpen.add(sp);
+      flash = '.pinfo';
+    } else {
+      activeTab = sp; sponsorView = 'tasks';
+    }
+    render();
+    if(flash) flashSelector(flash);
+  }
+
   function renderSearchResults(){
     var host = document.getElementById('content');
-    var q = searchQuery.toLowerCase();
-    var matches = tasks.filter(function(t){
-      return t.text.toLowerCase().indexOf(q) !== -1 || t.sponsor.toLowerCase().indexOf(q) !== -1;
-    }).sort(function(a,b){
+    var tk = searchTokens(searchQuery);
+    var sections = [];
+    function addSection(title, items){ if(items.length) sections.push({ title: title, items: items }); }
+    function item(type, id, sp, tag, title, snip){
+      return '<div class="sr-item" data-sr="' + type + '" data-srid="' + escAttr(id) + '" data-srsp="' + escAttr(sp || '') + '">' +
+        '<span class="sr-type">' + escapeHtml(tag) + '</span><div><div class="sr-title">' + title + '</div>' +
+        (snip ? '<div class="sr-snip">' + snip + '</div>' : '') + '</div></div>';
+    }
+
+    var matches = tasks.filter(function(t){ return hasAll(tk, hayOf([t.text, t.sponsor, t.notes])); }).sort(function(a,b){
       if(a.status === 'done' && b.status !== 'done') return 1;
       if(b.status === 'done' && a.status !== 'done') return -1;
       if(a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1; if(WHEN_ORDER[a.when] !== WHEN_ORDER[b.when]) return WHEN_ORDER[a.when] - WHEN_ORDER[b.when]; var dc = dueCmp(a, b); if(dc) return dc;
       return 0;
     });
-    var rows = matches.length === 0
-      ? '<p class="empty-list">No tasks match "' + escapeHtml(searchQuery) + '".</p>'
-      : matches.map(function(t, idx){ return taskRowHtml(t, idx, true); }).join('');
-    host.innerHTML = '<h2 class="section-title" style="color:var(--myrtle);">Search results</h2><div class="task-list">' + rows + '</div>';
+
+    var noteItems = meetings.filter(function(m){ return hasAll(tk, hayOf([m.title, m.body, m.sponsor, prettyDate(m.date)])); })
+      .sort(function(a,b){ return a.date < b.date ? 1 : -1; })
+      .map(function(m){
+        return item('note', m.id, m.sponsor, 'Meeting note', highlight((m.title || 'Untitled meeting') + '', tk) + ' <span style="font-weight:400;color:var(--ink-soft);">' + escapeHtml(prettyDate(m.date) + (m.sponsor ? ', ' + m.sponsor : '')) + '</span>', bestSnippet([m.body, m.title], tk));
+      });
+
+    var delivItems = [];
+    Object.keys(wip).forEach(function(sp){
+      wipItemsFor(sp).forEach(function(it){
+        if(!hasAll(tk, hayOf([it.name, it.category, it.qty, it.resp, it.actions, it.comments, it.progress]))) return;
+        delivItems.push(item('deliv', it.id, sp, 'Deliverable', highlight(it.name || '', tk) + ' <span style="font-weight:400;color:var(--ink-soft);">' + escapeHtml(sp + ', ' + (it.category || 'General') + ', ' + it.progress) + '</span>', bestSnippet([it.actions, it.comments, it.qty], tk)));
+      });
+    });
+
+    var infoItems = [];
+    Object.keys(partnerInfo).concat(Object.keys(wip)).filter(function(v, i, a){ return a.indexOf(v) === i; }).forEach(function(sp){
+      var pi = infoFor(sp), w = (wip[sp] && wip[sp].info) || {};
+      var cText = pi.contacts.map(function(c){ return [c.name, c.role, c.email, c.phone].join(' '); }).join(' | ');
+      if(!hasAll(tk, hayOf([pi.notes, cText, w.designation, w.objectives, w.contacts]))) return;
+      infoItems.push(item('info', sp, sp, 'Partner info', escapeHtml(sp), bestSnippet([pi.notes, cText, w.contacts, w.designation, w.objectives], tk)));
+    });
+
+    var hospItems = [];
+    Object.keys(hosp).forEach(function(sp){
+      var h = hosp[sp] || {};
+      var rows = h.rows || {};
+      Object.keys(rows).forEach(function(fid){
+        var fx = fixtures.games.concat(fixtures.events).filter(function(x){ return x.id === fid; })[0];
+        if(!fx) return;
+        var label = fx.opponent !== undefined ? gameLabel(fx) : fx.name;
+        if(!hasAll(tk, hayOf([label, fx.venue, rows[fid].notes]))) return;
+        hospItems.push(item('hosp', fid, sp, 'Hospitality', highlight(label, tk) + ' <span style="font-weight:400;color:var(--ink-soft);">' + escapeHtml(sp) + '</span>', bestSnippet([rows[fid].notes, fx.venue], tk)));
+      });
+    });
+
+    var fxItems = [];
+    sortFixtures(fixtures.games).forEach(function(g){
+      if(!hasAll(tk, hayOf([g.round, g.opponent, g.venue, fmtDateTime(g.date, g.time), prettyDate(g.date)]))) return;
+      fxItems.push(item('fixture', g.id, '', 'Game', highlight(gameLabel(g), tk), snippetHtml([g.venue, fmtDateTime(g.date, g.time)].filter(Boolean).join(', '), tk)));
+    });
+    sortFixtures(fixtures.events).forEach(function(e){
+      if(!hasAll(tk, hayOf([e.name, e.venue, fmtDateTime(e.date, e.time), prettyDate(e.date)]))) return;
+      fxItems.push(item('fixture', e.id, '', 'Event', highlight(e.name || '', tk), snippetHtml([e.venue, fmtDateTime(e.date, e.time)].filter(Boolean).join(', '), tk)));
+    });
+
+    var partnerItems = sponsors.filter(function(n){ return hasAll(tk, n.toLowerCase()); }).map(function(n){
+      return item('partner', n, n, catOf(n) === 'project' ? 'Project' : 'Partner', highlight(n, tk), '');
+    });
+
+    addSection('Meeting notes', noteItems);
+    addSection('Deliverables', delivItems);
+    addSection('Partner info', infoItems);
+    addSection('Hospitality', hospItems);
+    addSection('Fixtures', fxItems);
+    addSection('Partners and projects', partnerItems);
+
+    var html = '<h2 class="section-title" style="color:var(--myrtle);">Search results for "' + escapeHtml(searchQuery) + '"</h2>';
+    if(matches.length){
+      html += '<div class="sr-section"><h3 class="fx-h">Tasks (' + matches.length + ')</h3><div class="task-list">' +
+        matches.map(function(t, idx){ return taskRowHtml(t, idx, true); }).join('') + '</div></div>';
+    }
+    sections.forEach(function(sec){
+      var shown = sec.items.slice(0, 25).join('');
+      html += '<div class="sr-section"><h3 class="fx-h">' + sec.title + ' (' + sec.items.length + ')</h3>' + shown +
+        (sec.items.length > 25 ? '<p class="sr-more">and ' + (sec.items.length - 25) + ' more. Try a more specific search.</p>' : '') + '</div>';
+    });
+    if(!matches.length && !sections.length){
+      html += '<p class="empty-list">Nothing found. Try a different word, or part of a name.</p>';
+    }
+    host.innerHTML = html;
     attachRowHandlers(host);
+    host.querySelectorAll('[data-sr]').forEach(function(el){
+      el.onclick = function(){ goToResult(el.getAttribute('data-sr'), el.getAttribute('data-srid'), el.getAttribute('data-srsp')); };
+    });
   }
 
   function todayStr(){
